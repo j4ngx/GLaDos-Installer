@@ -38,12 +38,12 @@ configure_openclaw_telegram() {
   log "Configuring Telegram channel (token not logged for security)."
   oc_config_set channels.telegram.enabled true
 
-  # Export token so child processes (openclaw) spawned from oc_config_set can
-  # read it via --from-env.  Inline VAR=value on a bash *function* only sets
-  # it in the shell scope — it does NOT propagate to external commands called
-  # inside the function.
-  export TELEGRAM_BOT_TOKEN
-  oc_config_set channels.telegram.botToken --from-env TELEGRAM_BOT_TOKEN
+  # Pass token directly as a value. The token only contains [0-9:A-Za-z_-],
+  # safe for command-line args. Briefly visible in `ps` but acceptable on a
+  # local single-user server. --from-env and --from-stdin proved unreliable
+  # with subshell capture in oc_config_set.
+  oc_config_set channels.telegram.botToken "$TELEGRAM_BOT_TOKEN"
+
   oc_config_set channels.telegram.dmPolicy "pairing"
 
   success "Telegram channel configured."
