@@ -22,11 +22,6 @@ DETECTED_GPU="none"
 configure_gpu() {
   section "GPU detection & acceleration"
 
-  if [[ "$SKIP_GPU" == true ]]; then
-    info "GPU detection skipped (--skip-gpu)."
-    return 0
-  fi
-
   _detect_gpu
 
   case "$DETECTED_GPU" in

@@ -24,11 +24,6 @@ FIREWALL_SSH_PORT="${FIREWALL_SSH_PORT:-22}"
 configure_firewall() {
   section "Firewall (UFW) configuration"
 
-  if [[ "$SKIP_FIREWALL" == true ]]; then
-    info "Firewall configuration skipped (--skip-firewall)."
-    return 0
-  fi
-
   # Install UFW if not present
   if ! command -v ufw >/dev/null 2>&1; then
     spinner_start "Installing UFW..."

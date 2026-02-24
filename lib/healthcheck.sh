@@ -26,11 +26,6 @@ readonly HEALTHCHECK_CRON_INTERVAL="*/5"   # every 5 minutes
 configure_healthcheck() {
   section "Automated health monitoring (cron)"
 
-  if [[ "$SKIP_HEALTHCHECK" == true ]]; then
-    info "Health monitoring skipped (--skip-healthcheck)."
-    return 0
-  fi
-
   if [[ "$NON_INTERACTIVE" != true ]]; then
     echo
     echo -e "  ${BOLD}Health monitoring${NC}"
