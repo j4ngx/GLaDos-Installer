@@ -36,7 +36,7 @@ readonly WHISPER_INSTALL_DIR="$HOME/.local/share/whisper.cpp"
 readonly PIPER_INSTALL_DIR="$HOME/.local/share/piper"
 readonly PIPER_BIN_DIR="$HOME/.local/bin"
 readonly PIPER_RELEASES_URL="https://github.com/rhasspy/piper/releases/latest/download"
-readonly PIPER_DEFAULT_VOICE="en_US-amy-medium"
+PIPER_DEFAULT_VOICE="en_US-amy-medium"
 
 # SearXNG web-search
 readonly SEARXNG_COMPOSE_DIR="$HOME/glados-searxng"
@@ -50,10 +50,35 @@ SKIP_TELEGRAM="${SKIP_TELEGRAM:-false}"
 SKIP_ONBOARD="${SKIP_ONBOARD:-false}"
 SKIP_AUDIO="${SKIP_AUDIO:-false}"
 SKIP_INTERNET="${SKIP_INTERNET:-false}"
+SKIP_STATIC_IP="${SKIP_STATIC_IP:-false}"
+SKIP_SWAP="${SKIP_SWAP:-false}"
+SKIP_FIREWALL="${SKIP_FIREWALL:-false}"
+SKIP_HARDENING="${SKIP_HARDENING:-false}"
+SKIP_HEALTHCHECK="${SKIP_HEALTHCHECK:-false}"
+SKIP_GPU="${SKIP_GPU:-false}"
 DRY_RUN="${DRY_RUN:-false}"
 VERBOSE="${VERBOSE:-false}"
 SHOW_STATUS="${SHOW_STATUS:-false}"
 WHISPER_MODEL="${WHISPER_MODEL:-$WHISPER_DEFAULT_MODEL}"
+
+# Swap configuration
+SWAP_SIZE_MB="${SWAP_SIZE_MB:-auto}"        # "auto" = match RAM, cap 8 GB
+
+# Firewall configuration
+FIREWALL_SSH_PORT="${FIREWALL_SSH_PORT:-22}"
+
+# Hardening configuration
+GLADOS_HOSTNAME="${GLADOS_HOSTNAME:-}"          # empty = prompt or skip
+GLADOS_TIMEZONE="${GLADOS_TIMEZONE:-}"          # empty = auto-detect / prompt
+HARDEN_SSH="${HARDEN_SSH:-true}"
+
+# Piper voice (selectable interactively or via CLI)
+PIPER_VOICE="${PIPER_VOICE:-}"                  # empty = use PIPER_DEFAULT_VOICE
+
+# Proxy support (used by curl, apt, docker)
+HTTP_PROXY="${HTTP_PROXY:-}"
+HTTPS_PROXY="${HTTPS_PROXY:-}"
+NO_PROXY="${NO_PROXY:-localhost,127.0.0.1}"
 
 # Telegram token (prefer: export TELEGRAM_BOT_TOKEN before running)
 : "${TELEGRAM_BOT_TOKEN:=}"
@@ -97,7 +122,8 @@ fi
 _strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
 _log_raw() {
-  local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+  local msg
+  msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
   echo -e "$msg" | _strip_ansi >>"$LOG_FILE"
   echo -e "$msg"
 }
@@ -123,6 +149,7 @@ spinner_start() {
   fi
   (
     set +eEu
+    trap 'exit 0' TERM
     trap '' ERR
     local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
     local i=0
@@ -233,7 +260,8 @@ secure_download_and_run() {
 
   debug "Downloaded ${description}: $(wc -c < "$tmpfile") bytes."
   warn "No checksum/signature verification for ${description} — trust the source URL."
-  bash --noprofile --norc -euo pipefail "$tmpfile" "${shell_args[@]}"
+  # Use -eu without pipefail: external scripts may not be pipefail-safe
+  bash --noprofile --norc -eu "$tmpfile" "${shell_args[@]}"
   local rc=$?
   rm -f "$tmpfile"
   return $rc
