@@ -12,9 +12,6 @@
 [[ -n "${_GLADOS_SWAP_LOADED:-}" ]] && return 0
 readonly _GLADOS_SWAP_LOADED=1
 
-# Defaults (overridable via CLI)
-SWAP_SIZE_MB="${SWAP_SIZE_MB:-auto}"
-SKIP_SWAP="${SKIP_SWAP:-false}"
 readonly GLADOS_SWAP_FILE="/swapfile"
 
 ###############################################################################

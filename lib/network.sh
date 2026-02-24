@@ -17,12 +17,11 @@
 [[ -n "${_GLADOS_NETWORK_LOADED:-}" ]] && return 0
 readonly _GLADOS_NETWORK_LOADED=1
 
-# Defaults — can be overridden via CLI flags
+# Network-specific defaults (overridable via CLI flags)
 STATIC_IP="${STATIC_IP:-}"
 STATIC_GATEWAY="${STATIC_GATEWAY:-}"
 STATIC_DNS="${STATIC_DNS:-1.1.1.1}"
 STATIC_NETMASK="${STATIC_NETMASK:-24}"
-SKIP_STATIC_IP="${SKIP_STATIC_IP:-false}"
 
 ###############################################################################
 # Detect primary network interface
@@ -350,9 +349,14 @@ check_network_static() {
 
   # Check if interface is statically configured
   if command -v nmcli >/dev/null 2>&1; then
-    local nm_method
-    nm_method="$(nmcli -t -f ipv4.method con show "$iface" 2>/dev/null | cut -d: -f2)"
-    [[ "$nm_method" == "manual" ]] && method="static"
+    local conn_name
+    conn_name="$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null \
+      | grep ":${iface}$" | head -1 | cut -d: -f1)"
+    if [[ -n "$conn_name" ]]; then
+      local nm_method
+      nm_method="$(nmcli -t -f ipv4.method con show "$conn_name" 2>/dev/null | cut -d: -f2)"
+      [[ "$nm_method" == "manual" ]] && method="static"
+    fi
   elif grep -q "iface ${iface} inet static" /etc/network/interfaces 2>/dev/null; then
     method="static"
   elif [[ -f /etc/netplan/99-glados-static.yaml ]]; then

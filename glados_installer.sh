@@ -209,14 +209,21 @@ parse_args() {
         ;;
       --static-mask)
         shift; [[ $# -gt 0 ]] || fail "--static-mask requires a value."
+        if ! [[ "$1" =~ ^[0-9]+$ ]] || (( $1 < 1 || $1 > 32 )); then
+          fail "--static-mask must be 1-32 (CIDR prefix)."
+        fi
         STATIC_NETMASK="$1"
         ;;
       --swap-size)
         shift; [[ $# -gt 0 ]] || fail "--swap-size requires a value."
+        [[ "$1" =~ ^[0-9]+$ ]] || fail "--swap-size must be a positive integer (MB)."
         SWAP_SIZE_MB="$1"
         ;;
       --ssh-port)
         shift; [[ $# -gt 0 ]] || fail "--ssh-port requires a value."
+        if ! [[ "$1" =~ ^[0-9]+$ ]] || (( $1 < 1 || $1 > 65535 )); then
+          fail "--ssh-port must be 1-65535."
+        fi
         FIREWALL_SSH_PORT="$1"
         ;;
       --hostname)

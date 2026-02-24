@@ -12,7 +12,6 @@
 [[ -n "${_GLADOS_GPU_LOADED:-}" ]] && return 0
 readonly _GLADOS_GPU_LOADED=1
 
-SKIP_GPU="${SKIP_GPU:-false}"
 DETECTED_GPU="none"
 
 ###############################################################################

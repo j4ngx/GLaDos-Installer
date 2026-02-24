@@ -13,10 +13,6 @@
 [[ -n "${_GLADOS_FIREWALL_LOADED:-}" ]] && return 0
 readonly _GLADOS_FIREWALL_LOADED=1
 
-# Defaults
-SKIP_FIREWALL="${SKIP_FIREWALL:-false}"
-FIREWALL_SSH_PORT="${FIREWALL_SSH_PORT:-22}"
-
 ###############################################################################
 # Main entry point
 ###############################################################################
@@ -78,14 +74,12 @@ _apply_firewall_rules() {
   run_cmd sudo ufw default deny incoming
   run_cmd sudo ufw default allow outgoing
 
-  # Allow SSH
-  run_cmd sudo ufw allow "${FIREWALL_SSH_PORT}/tcp" comment "SSH"
+  # Allow SSH with rate-limiting to prevent brute-force
+  # (ufw limit already allows + rate-limits; a separate 'allow' would override it)
+  run_cmd sudo ufw limit "${FIREWALL_SSH_PORT}/tcp" comment "SSH (rate-limited)"
 
   # Allow localhost traffic (needed for inter-service communication)
   run_cmd sudo ufw allow in on lo comment "Loopback"
-
-  # Rate-limit SSH to prevent brute-force
-  run_cmd sudo ufw limit "${FIREWALL_SSH_PORT}/tcp" comment "SSH rate-limit"
 
   spinner_stop
 

@@ -36,6 +36,14 @@ install_docker_if_missing() {
     warn "Docker installer does not start with a shebang — proceeding with caution."
   fi
   debug "Docker installer downloaded: $(wc -c < "$tmpfile") bytes."
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] Would execute Docker installer ($(wc -c < "$tmpfile") bytes)."
+    rm -f "$tmpfile"
+    spinner_stop
+    return 0
+  fi
+
   # Use -e only: the third-party script may reference unset variables
   sudo bash --noprofile --norc -e "$tmpfile"
   rm -f "$tmpfile"

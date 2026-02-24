@@ -326,7 +326,7 @@ done
 
 # Resolve model: prefer explicit arg, then openclaw config, then default
 if [[ -z "$MODEL" ]] && command -v openclaw >/dev/null 2>&1; then
-  MODEL="$(openclaw config get agents.defaults.model.primary 2>/dev/null | sed 's|^ollama/||' || echo '')"
+  MODEL="$(openclaw config get agents.defaults.model.primary 2>/dev/null | sed 's|^[^/]*/||' || echo '')"
 fi
 MODEL="${MODEL:-llama3}"
 

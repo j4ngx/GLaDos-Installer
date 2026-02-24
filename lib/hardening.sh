@@ -15,12 +15,6 @@
 [[ -n "${_GLADOS_HARDENING_LOADED:-}" ]] && return 0
 readonly _GLADOS_HARDENING_LOADED=1
 
-# Defaults
-SKIP_HARDENING="${SKIP_HARDENING:-false}"
-GLADOS_HOSTNAME="${GLADOS_HOSTNAME:-}"
-GLADOS_TIMEZONE="${GLADOS_TIMEZONE:-}"
-HARDEN_SSH="${HARDEN_SSH:-true}"
-
 ###############################################################################
 # Main entry point
 ###############################################################################
@@ -76,13 +70,11 @@ _configure_hostname() {
 
   run_cmd sudo hostnamectl set-hostname "$GLADOS_HOSTNAME"
 
-  # Update /etc/hosts if needed
-  if ! grep -q "$GLADOS_HOSTNAME" /etc/hosts 2>/dev/null; then
-    run_cmd sudo bash -c "sed -i 's/127.0.1.1.*/127.0.1.1\t${GLADOS_HOSTNAME}/' /etc/hosts"
-    # If no 127.0.1.1 line exists, add one
-    if ! grep -q "127.0.1.1" /etc/hosts 2>/dev/null; then
-      run_cmd sudo bash -c "echo '127.0.1.1	${GLADOS_HOSTNAME}' >> /etc/hosts"
-    fi
+  # Update /etc/hosts — always ensure 127.0.1.1 maps to the new hostname
+  if grep -q "^127\.0\.1\.1" /etc/hosts 2>/dev/null; then
+    run_cmd sudo sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t${GLADOS_HOSTNAME}/" /etc/hosts
+  else
+    run_cmd sudo bash -c "echo '127.0.1.1\t${GLADOS_HOSTNAME}' >> /etc/hosts"
   fi
 
   success "Hostname set to '${GLADOS_HOSTNAME}'."

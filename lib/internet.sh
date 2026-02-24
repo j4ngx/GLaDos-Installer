@@ -230,18 +230,10 @@ _start_searxng() {
     return
   fi
 
-  # Determine correct compose command (v1: docker-compose / v2: docker compose)
-  local -a compose_cmd
-  if docker compose version >/dev/null 2>&1; then
-    compose_cmd=(docker compose)
-  elif command -v docker-compose >/dev/null 2>&1; then
-    compose_cmd=(docker-compose)
-  else
-    spinner_stop
-    fail "Neither 'docker compose' (v2) nor 'docker-compose' (v1) is available."
-  fi
+  local -a _compose
+  read -ra _compose <<< "$(compose_cmd)"
 
-  "${compose_cmd[@]}" \
+  "${_compose[@]}" \
     -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" \
     --project-name glados-searxng \
     up -d --pull always 2>&1 | while IFS= read -r line; do
@@ -263,12 +255,14 @@ _wait_for_searxng() {
   local url="http://127.0.0.1:${SEARXNG_PORT}/healthz"
 
   spinner_start "Waiting for SearXNG to be ready (max ${timeout}s)..."
+
+  if [[ "$DRY_RUN" == true ]]; then
+    spinner_stop
+    info "[dry-run] Skipping SearXNG health wait."
+    return
+  fi
+
   while [[ $waited -lt $timeout ]]; do
-    if [[ "$DRY_RUN" == true ]]; then
-      spinner_stop
-      info "[dry-run] Skipping SearXNG health wait."
-      return
-    fi
     if curl -sfm 3 "$url" >/dev/null 2>&1; then
       spinner_stop
       success "SearXNG is healthy at http://127.0.0.1:${SEARXNG_PORT} ✔"
@@ -287,13 +281,9 @@ _wait_for_searxng() {
 
 teardown_internet_search() {
   info "Stopping SearXNG containers..."
-  local -a compose_cmd
-  if docker compose version >/dev/null 2>&1; then
-    compose_cmd=(docker compose)
-  else
-    compose_cmd=(docker-compose)
-  fi
-  "${compose_cmd[@]}" \
+  local -a _compose
+  read -ra _compose <<< "$(compose_cmd)"
+  "${_compose[@]}" \
     -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" \
     --project-name glados-searxng \
     down 2>/dev/null || true

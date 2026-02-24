@@ -274,11 +274,32 @@ secure_download_and_run() {
 
   debug "Downloaded ${description}: $(wc -c < "$tmpfile") bytes."
   warn "No checksum/signature verification for ${description} — trust the source URL."
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] Would execute downloaded ${description} ($(wc -c < "$tmpfile") bytes)."
+    rm -f "$tmpfile"
+    return 0
+  fi
+
   # Use -e only: external scripts may reference unset variables
   bash --noprofile --norc -e "$tmpfile" "${shell_args[@]}"
   local rc=$?
   rm -f "$tmpfile"
   return $rc
+}
+
+###############################################################################
+# Docker Compose command detection (v2: docker compose / v1: docker-compose)
+###############################################################################
+
+compose_cmd() {
+  if docker compose version >/dev/null 2>&1; then
+    echo "docker compose"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    echo "docker-compose"
+  else
+    fail "Neither 'docker compose' (v2) nor 'docker-compose' (v1) is available."
+  fi
 }
 
 ###############################################################################

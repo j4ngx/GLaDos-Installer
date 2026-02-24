@@ -14,7 +14,6 @@
 [[ -n "${_GLADOS_HEALTHCHECK_LOADED:-}" ]] && return 0
 readonly _GLADOS_HEALTHCHECK_LOADED=1
 
-SKIP_HEALTHCHECK="${SKIP_HEALTHCHECK:-false}"
 readonly HEALTHCHECK_SCRIPT="$HOME/.local/bin/glados-healthcheck"
 readonly HEALTHCHECK_LOG="${LOG_DIR}/healthcheck.log"
 readonly HEALTHCHECK_CRON_INTERVAL="*/5"   # every 5 minutes

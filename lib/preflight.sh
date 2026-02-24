@@ -91,5 +91,7 @@ preflight_checks() {
   # --- Dependency versions ----------------------------------------------------
   command -v curl >/dev/null 2>&1 || fail "curl is required but not installed."
   check_min_version curl "$MIN_CURL_VERSION" || true
-  command -v git >/dev/null 2>&1 && check_min_version git "$MIN_GIT_VERSION" || true
+  if command -v git >/dev/null 2>&1; then
+    check_min_version git "$MIN_GIT_VERSION" || true
+  fi
 }

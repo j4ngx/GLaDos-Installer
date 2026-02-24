@@ -231,13 +231,9 @@ run_uninstall() {
   # Stop SearXNG
   if [[ -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" ]] && command -v docker >/dev/null 2>&1; then
     info "Stopping SearXNG containers..."
-    local -a compose_cmd
-    if docker compose version >/dev/null 2>&1; then
-      compose_cmd=(docker compose)
-    else
-      compose_cmd=(docker-compose)
-    fi
-    "${compose_cmd[@]}" -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" --project-name glados-searxng down -v 2>/dev/null || true
+    local -a _compose
+    read -ra _compose <<< "$(compose_cmd)"
+    "${_compose[@]}" -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" --project-name glados-searxng down -v 2>/dev/null || true
     rm -rf "$SEARXNG_COMPOSE_DIR"
     success "SearXNG removed."
   fi
@@ -257,7 +253,7 @@ run_uninstall() {
 
   # Remove wrapper scripts
   for script in glados-stt glados-tts glados-voice glados-healthcheck; do
-    rm -f "${PIPER_BIN_DIR}/${script}" "$HOME/.local/bin/${script}"
+    rm -f "${PIPER_BIN_DIR}/${script}"
   done
   success "GLaDOS scripts removed."
 
