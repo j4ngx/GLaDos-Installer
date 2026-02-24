@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "."
+          severity: warning
+          additional_files: "glados_installer.sh"
+
+  syntax-check:
+    name: Bash Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: bash -n glados_installer.sh
+
+  permissions-check:
+    name: File Permissions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify script is executable
+        run: |
+          if [[ ! -x glados_installer.sh ]]; then
+            echo "::warning::glados_installer.sh is not executable. Run: chmod +x glados_installer.sh"
+          fi
+
+  dry-run:
+    name: Dry Run Test
+    runs-on: ubuntu-latest
+    needs: [shellcheck, syntax-check]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run installer in dry-run mode
+        run: |
+          chmod +x glados_installer.sh
+          ./glados_installer.sh --dry-run --non-interactive --skip-telegram --verbose || true
