@@ -61,11 +61,11 @@ docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable glados_installer.sh
 ### Running Lint
 
 ```bash
-# Using Make
+# Using Make (lints main script + all lib modules)
 make lint
 
 # Directly
-shellcheck -x -s bash glados_installer.sh
+shellcheck -x -s bash glados_installer.sh lib/*.sh
 ```
 
 ### Dry-Run Testing
@@ -73,6 +73,9 @@ shellcheck -x -s bash glados_installer.sh
 ```bash
 # Preview without changes
 ./glados_installer.sh --dry-run --verbose
+
+# Minimal preview (skip heavy optional features)
+./glados_installer.sh --dry-run --skip-audio --skip-internet --skip-telegram --skip-gpu
 ```
 
 ## Coding Standards
@@ -98,19 +101,28 @@ shellcheck -x -s bash glados_installer.sh
 
 ### Code Structure
 
-Each major function should follow this pattern:
+The installer uses a **modular library architecture** with 17 modules in `lib/`. The main script (`glados_installer.sh`) sources all modules and orchestrates the 4-phase installation pipeline.
 
+**Adding a new module:**
+
+1. Create `lib/yourmodule.sh` following the source-guard pattern:
+```bash
+[[ -n "${_GLADOS_YOURMODULE_LOADED:-}" ]] && return
+_GLADOS_YOURMODULE_LOADED=1
+```
+
+2. Export a main function and a health-check function:
 ```bash
 ###############################################################################
 # Section Name
 ###############################################################################
 
-function_name() {
+configure_yourmodule() {
   section "Step description"
 
   # Check if already done (idempotent)
-  if already_installed; then
-    success "Already installed."
+  if already_configured; then
+    success "Already configured."
     return
   fi
 
@@ -121,7 +133,25 @@ function_name() {
 
   success "Done."
 }
+
+check_yourmodule_health() {
+  if condition_is_met; then
+    echo -e "  ${GREEN}✔${NC}  YourModule      : healthy"
+  else
+    echo -e "  ${RED}✘${NC}  YourModule      : not running"
+    return 1
+  fi
+}
 ```
+
+3. Source it in `glados_installer.sh`:
+```bash
+_source_lib yourmodule.sh
+```
+
+4. Add a `--skip-yourmodule` flag in `parse_args()` and wire it into `main()`.
+
+5. Add the health check to `run_health_check()` and `show_status()`.
 
 ## Commit Messages
 
