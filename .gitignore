@@ -1,0 +1,38 @@
+# =============================================================================
+# GLaDOS Installer .gitignore
+# =============================================================================
+
+# Installer logs
+logs/
+*.log
+
+# Lock files
+*.lock
+
+# OS-specific
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
