@@ -77,9 +77,10 @@ configure_openclaw_ollama() {
   # OpenClaw 2026+ uses 'vllm' as the provider type for any OpenAI-compatible
   # backend (including Ollama). The onboarding wizard registers it as 'vllm',
   # so config paths must use that key — not 'ollama'.
+  # Ollama's OpenAI-compatible API lives under /v1/ — the base URL must include it.
   oc_config_set models.providers.vllm.apiKey "ollama-local"
-  oc_config_set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
-  oc_config_set models.providers.vllm.api "openai-completions"
+  oc_config_set models.providers.vllm.baseUrl "http://127.0.0.1:11434/v1"
+  oc_config_set models.providers.vllm.api "openai-chat"
   oc_config_set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
 
   success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
