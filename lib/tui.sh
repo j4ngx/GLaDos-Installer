@@ -871,15 +871,10 @@ _tui_repeat() {
   local char="$1"
   local count="$2"
   (( count <= 0 )) && return
-  # Fast path for single-byte characters
-  if [[ ${#char} -eq 1 ]]; then
-    printf "%${count}s" "" | tr ' ' "$char"
-  else
-    local i
-    for (( i=0; i<count; i++ )); do
-      printf '%s' "$char"
-    done
-  fi
+  # Use bash parameter expansion (handles multi-byte UTF-8 correctly)
+  local _buf
+  printf -v _buf '%*s' "$count" ''
+  printf '%s' "${_buf// /$char}"
 }
 
 _tui_strip_ansi() {
