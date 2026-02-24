@@ -29,7 +29,7 @@ install_ollama() {
     run_cmd sudo systemctl enable --now ollama || true
   fi
 
-  _wait_for_ollama_api
+  _wait_for_ollama_api || warn "Ollama API may not be ready — continuing anyway."
 }
 
 _wait_for_ollama_api() {
@@ -52,7 +52,13 @@ _wait_for_ollama_api() {
 pull_ollama_model() {
   section "Pulling Ollama model: ${OLLAMA_META_MODEL_TAG}"
 
-  if ollama list 2>/dev/null | grep -q "^${OLLAMA_META_MODEL_TAG}[[:space:]]"; then
+  # Normalise tag for matching: 'model' matches 'model:latest', 'model:tag' matches exact
+  local match_tag="$OLLAMA_META_MODEL_TAG"
+  if [[ "$match_tag" != *:* ]]; then
+    match_tag="${match_tag}:latest"
+  fi
+
+  if ollama list 2>/dev/null | awk '{print $1}' | grep -qxF "$match_tag"; then
     success "Model '${OLLAMA_META_MODEL_TAG}' already available locally."
     return
   fi
@@ -73,7 +79,13 @@ check_ollama_health() {
     ok=false
   fi
 
-  if ollama list 2>/dev/null | grep -q "^${OLLAMA_META_MODEL_TAG}[[:space:]]"; then
+  # Normalise tag for matching: 'model' matches 'model:latest', 'model:tag' matches exact
+  local health_match_tag="$OLLAMA_META_MODEL_TAG"
+  if [[ "$health_match_tag" != *:* ]]; then
+    health_match_tag="${health_match_tag}:latest"
+  fi
+
+  if ollama list 2>/dev/null | awk '{print $1}' | grep -qxF "$health_match_tag"; then
     echo -e "  ${GREEN}✔${NC}  Ollama model    : ${OLLAMA_META_MODEL_TAG}"
   else
     echo -e "  ${RED}✖${NC}  Ollama model    : ${OLLAMA_META_MODEL_TAG} (missing)"
