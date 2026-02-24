@@ -233,14 +233,25 @@ _start_searxng() {
   local -a _compose
   read -ra _compose <<< "$(compose_cmd)"
 
+  local compose_rc=0
   "${_compose[@]}" \
     -f "${SEARXNG_COMPOSE_DIR}/docker-compose.yml" \
     --project-name glados-searxng \
-    up -d --pull always 2>&1 | while IFS= read -r line; do
-      debug "compose: ${line}"
-    done
+    up -d --pull always >"$LOG_FILE.searxng" 2>&1 || compose_rc=$?
+
+  # Log compose output regardless of success/failure
+  while IFS= read -r line; do
+    debug "compose: ${line}"
+  done < "$LOG_FILE.searxng"
+  rm -f "$LOG_FILE.searxng"
 
   spinner_stop
+
+  if [[ $compose_rc -ne 0 ]]; then
+    warn "docker compose up exited with code ${compose_rc} — check: docker logs glados-searxng"
+    return 0   # don't abort the installer
+  fi
+
   success "SearXNG containers started."
 }
 
