@@ -10,6 +10,7 @@ readonly _GLADOS_COMMON_LOADED=1
 
 ###############################################################################
 # Global constants & defaults (CLI-overridable by the main script)
+# shellcheck disable=SC2034   # Variables used by other sourced modules
 ###############################################################################
 
 readonly INSTALLER_NAME="GLaDOS Installer"
@@ -22,7 +23,7 @@ readonly SEARXNG_HEALTH_TIMEOUT=60   # seconds
 readonly SEARXNG_HEALTH_POLL=3       # seconds between health polls
 readonly NETWORK_RETRY_COUNT=3
 readonly NETWORK_RETRY_DELAY=5
-readonly LOCK_FILE="/tmp/glados_installer.lock"
+readonly LOCK_FILE="${HOME}/.glados_installer.lock"
 readonly MIN_CURL_VERSION="7.68.0"
 readonly MIN_GIT_VERSION="2.25.0"
 readonly MIN_DOCKER_VERSION="20.10.0"
@@ -36,7 +37,8 @@ readonly WHISPER_INSTALL_DIR="$HOME/.local/share/whisper.cpp"
 readonly PIPER_INSTALL_DIR="$HOME/.local/share/piper"
 readonly PIPER_BIN_DIR="$HOME/.local/bin"
 readonly PIPER_RELEASES_URL="https://github.com/rhasspy/piper/releases/latest/download"
-PIPER_DEFAULT_VOICE="en_US-amy-medium"
+readonly PIPER_DEFAULT_VOICE="en_US-amy-medium"
+PIPER_SELECTED_VOICE="${PIPER_DEFAULT_VOICE}"
 
 # SearXNG web-search
 readonly SEARXNG_COMPOSE_DIR="$HOME/glados-searxng"
@@ -73,7 +75,7 @@ GLADOS_TIMEZONE="${GLADOS_TIMEZONE:-}"          # empty = auto-detect / prompt
 HARDEN_SSH="${HARDEN_SSH:-true}"
 
 # Piper voice (selectable interactively or via CLI)
-PIPER_VOICE="${PIPER_VOICE:-}"                  # empty = use PIPER_DEFAULT_VOICE
+PIPER_VOICE="${PIPER_VOICE:-}"                  # empty = use PIPER_SELECTED_VOICE
 
 # Proxy support (used by curl, apt, docker)
 HTTP_PROXY="${HTTP_PROXY:-}"
@@ -99,6 +101,7 @@ LOG_FILE="${LOG_FILE:-$LOG_DIR/install_$(date '+%Y%m%d_%H%M%S').log}"
 
 ###############################################################################
 # Colour palette (auto-disabled when stdout is not a TTY)
+# shellcheck disable=SC2034   # Colours used by all sourced modules
 ###############################################################################
 
 if [[ -t 1 ]]; then
@@ -136,34 +139,37 @@ info()    { _log_raw "${CYAN} ℹ  $*${NC}"; }
 fail()    { _log_raw "${RED} ✖  $*${NC}"; exit 1; }
 
 ###############################################################################
-# Spinner
+# Spinner — delegates to TUI library when loaded, fallback otherwise
 ###############################################################################
 
 _SPINNER_PID=""
 
 spinner_start() {
   local msg="${1:-Working...}"
-  if [[ ! -t 1 ]]; then
-    log "$msg"
+  if declare -F tui_spinner_start >/dev/null 2>&1; then
+    tui_spinner_start "$msg"
     return
   fi
+  # Fallback (tui.sh not yet loaded)
+  if [[ ! -t 1 ]]; then log "$msg"; return; fi
   (
-    set +eEu
-    trap 'exit 0' TERM
-    trap '' ERR
+    set +eEu; trap 'exit 0' TERM; trap '' ERR
     local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
     local i=0
     while true; do
       printf "\r  ${CYAN}%s${NC} %s " "${frames[$((i % ${#frames[@]}))]}" "$msg"
-      i=$((i + 1))
-      sleep 0.12
+      i=$((i + 1)); sleep 0.12
     done
   ) &
-  _SPINNER_PID=$!
-  disown "$_SPINNER_PID" 2>/dev/null || true
+  _SPINNER_PID=$!; disown "$_SPINNER_PID" 2>/dev/null || true
 }
 
 spinner_stop() {
+  if declare -F tui_spinner_stop >/dev/null 2>&1; then
+    tui_spinner_stop
+    return
+  fi
+  # Fallback
   if [[ -n "${_SPINNER_PID:-}" ]] && kill -0 "$_SPINNER_PID" 2>/dev/null; then
     kill "$_SPINNER_PID" 2>/dev/null || true
     wait "$_SPINNER_PID" 2>/dev/null || true
@@ -177,7 +183,11 @@ spinner_stop() {
 ###############################################################################
 
 elapsed_time() {
-  local start="${1:-$INSTALL_START_EPOCH}"
+  local start="${1:-${INSTALL_START_EPOCH:-}}"
+  if [[ -z "$start" ]]; then
+    printf '0m 00s'
+    return
+  fi
   local now
   now="$(date +%s)"
   local diff=$(( now - start ))
@@ -185,17 +195,22 @@ elapsed_time() {
 }
 
 ###############################################################################
-# Section header
+# Section header — delegates to TUI when available
 ###############################################################################
 
 section() {
   local title="$1"
   CURRENT_STEP=$((CURRENT_STEP + 1))
-  local progress="[${CURRENT_STEP}/${TOTAL_STEPS}]"
-  echo
-  echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${BLUE}  ${BOLD}${progress}${NC} ${BLUE}${title}${NC}"
-  echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  local step_label="${CURRENT_STEP}/${TOTAL_STEPS}"
+
+  if declare -F tui_section >/dev/null 2>&1; then
+    tui_section "$title" "$step_label"
+  else
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  ${BOLD}[${step_label}]${NC} ${BLUE}${title}${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  fi
 }
 
 ###############################################################################
@@ -260,8 +275,8 @@ secure_download_and_run() {
 
   debug "Downloaded ${description}: $(wc -c < "$tmpfile") bytes."
   warn "No checksum/signature verification for ${description} — trust the source URL."
-  # Use -eu without pipefail: external scripts may not be pipefail-safe
-  bash --noprofile --norc -eu "$tmpfile" "${shell_args[@]}"
+  # Use -e only: external scripts may reference unset variables
+  bash --noprofile --norc -e "$tmpfile" "${shell_args[@]}"
   local rc=$?
   rm -f "$tmpfile"
   return $rc
@@ -323,6 +338,11 @@ check_min_version() {
 ###############################################################################
 
 confirm() {
+  if declare -F tui_confirm >/dev/null 2>&1; then
+    tui_confirm "$@"
+    return $?
+  fi
+  # Fallback
   local prompt="$1"
   local default="${2:-y}"
   if [[ "$NON_INTERACTIVE" == true ]]; then
@@ -346,6 +366,11 @@ confirm() {
 }
 
 prompt_value() {
+  if declare -F tui_input >/dev/null 2>&1; then
+    tui_input "$1" "$2" "$3"
+    return
+  fi
+  # Fallback
   local prompt="$1"
   local default="$2"
   local varname="$3"
