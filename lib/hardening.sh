@@ -28,11 +28,6 @@ HARDEN_SSH="${HARDEN_SSH:-true}"
 configure_hardening() {
   section "Server hardening & system configuration"
 
-  if [[ "$SKIP_HARDENING" == true ]]; then
-    info "Server hardening skipped (--skip-hardening)."
-    return 0
-  fi
-
   _configure_hostname
   _configure_timezone
   _configure_ssh_hardening
@@ -325,6 +320,7 @@ check_hardening_health() {
     echo -e "  ${GREEN}✔${NC}  SSH hardening   : applied"
   else
     echo -e "  ${YELLOW}⚠${NC}  SSH hardening   : not applied"
+    ok=false
   fi
 
   # Unattended upgrades
@@ -332,6 +328,7 @@ check_hardening_health() {
     echo -e "  ${GREEN}✔${NC}  Auto-updates    : enabled"
   else
     echo -e "  ${YELLOW}⚠${NC}  Auto-updates    : not configured"
+    ok=false
   fi
 
   # Log rotation
@@ -339,6 +336,7 @@ check_hardening_health() {
     echo -e "  ${GREEN}✔${NC}  Log rotation    : configured"
   else
     echo -e "  ${YELLOW}⚠${NC}  Log rotation    : not configured"
+    ok=false
   fi
 
   [[ "$ok" == true ]]
