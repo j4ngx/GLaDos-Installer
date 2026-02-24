@@ -37,6 +37,7 @@ _source_lib() {
 }
 
 _source_lib common.sh
+_source_lib tui.sh
 _source_lib preflight.sh
 _source_lib network.sh
 _source_lib swap.sh
@@ -57,27 +58,11 @@ _source_lib backup.sh
 export LOG_FILE
 
 ###############################################################################
-# ASCII-art banner
+# ASCII-art banner (delegates to TUI library)
 ###############################################################################
 
 print_banner() {
-  clear 2>/dev/null || true
-  echo -e "${MAGENTA}"
-  cat <<'BANNER'
-
-    ██████╗ ██╗      █████╗ ██████╗  ██████╗ ███████╗
-   ██╔════╝ ██║     ██╔══██╗██╔══██╗██╔═══██╗██╔════╝
-   ██║  ███╗██║     ███████║██║  ██║██║   ██║███████╗
-   ██║   ██║██║     ██╔══██║██║  ██║██║   ██║╚════██║
-   ╚██████╔╝███████╗██║  ██║██████╔╝╚██████╔╝███████║
-    ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚══════╝
-
-       Local LLM · Voice I/O · Web Search · Telegram
-
-BANNER
-  echo -e "${NC}"
-  echo -e "  ${CYAN}${BOLD}${INSTALLER_NAME}${NC}  ${DIM}v${INSTALLER_VERSION}${NC}"
-  echo
+  tui_glados_banner
 }
 
 ###############################################################################
@@ -96,7 +81,7 @@ ${BOLD}CORE OPTIONS${NC}
   --agent-name <name>     OpenClaw agent label    (default: ${GLADOS_AGENT_NAME})
   --whisper-model <size>  Whisper STT model size  (default: ${WHISPER_MODEL})
                           Values: tiny · base · small · medium · large
-  --piper-voice <name>    Piper TTS voice name    (default: ${PIPER_DEFAULT_VOICE})
+  --piper-voice <name>    Piper TTS voice name    (default: ${PIPER_SELECTED_VOICE})
   --static-ip <ip>        Set a static IP         (e.g. 192.168.1.100)
   --static-gw <ip>        Static IP gateway       (e.g. 192.168.1.1)
   --static-dns <ip>       Static IP DNS server    (default: 1.1.1.1)
@@ -136,6 +121,7 @@ ${BOLD}MAINTENANCE${NC}
 
 ${BOLD}ENVIRONMENT VARIABLES${NC}
   TELEGRAM_BOT_TOKEN      Telegram bot token (export before running)
+  GLADOS_VOICE_MODEL      Default LLM model tag for glados-voice wrapper
   HTTP_PROXY              HTTP proxy (alternative to --http-proxy)
   HTTPS_PROXY             HTTPS proxy (alternative to --https-proxy)
 
@@ -245,14 +231,10 @@ parse_args() {
       --http-proxy)
         shift; [[ $# -gt 0 ]] || fail "--http-proxy requires a value."
         HTTP_PROXY="$1"
-        export HTTP_PROXY
-        export http_proxy="$1"
         ;;
       --https-proxy)
         shift; [[ $# -gt 0 ]] || fail "--https-proxy requires a value."
         HTTPS_PROXY="$1"
-        export HTTPS_PROXY
-        export https_proxy="$1"
         ;;
       --skip-static-ip)   SKIP_STATIC_IP=true ;;
       --skip-swap)        SKIP_SWAP=true ;;
@@ -312,12 +294,7 @@ cleanup() {
   spinner_stop
   release_lock
   if [[ $exit_code -ne 0 ]]; then
-    echo
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${RED}  Installation failed (exit code ${exit_code}).${NC}"
-    echo -e "${RED}  Log: ${LOG_FILE}${NC}"
-    echo -e "${RED}  Re-run this script to resume — completed steps are skipped.${NC}"
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    tui_failure_screen "$exit_code"
   fi
 }
 
@@ -329,36 +306,23 @@ trap 'fail "Terminated (SIGTERM)."'          TERM
 # Interactive installation plan review
 ###############################################################################
 
+###############################################################################
+# Interactive installation plan review
+###############################################################################
+
 interactive_review() {
   [[ "$NON_INTERACTIVE" == true ]] && return
 
-  echo
-  echo -e "  ${BOLD}Installation Plan${NC}"
-  echo -e "  ─────────────────────────────────────────────────────"
-  echo -e "  ${CYAN}Static IP        :${NC} $( [[ "$SKIP_STATIC_IP"   == true ]] && echo 'skip' || echo 'prompt' )"
-  echo -e "  ${CYAN}Swap file        :${NC} $( [[ "$SKIP_SWAP"        == true ]] && echo 'skip' || echo "size: ${SWAP_SIZE_MB}" )"
-  echo -e "  ${CYAN}GPU acceleration :${NC} $( [[ "$SKIP_GPU"         == true ]] && echo 'skip' || echo 'auto-detect' )"
-  echo -e "  ${CYAN}LLM model        :${NC} ${OLLAMA_META_MODEL_TAG}"
-  echo -e "  ${CYAN}Agent name       :${NC} ${GLADOS_AGENT_NAME}"
-  echo -e "  ${CYAN}Voice (Whisper)  :${NC} $( [[ "$SKIP_AUDIO"       == true ]] && echo 'skip' || echo "model: ${WHISPER_MODEL}" )"
-  echo -e "  ${CYAN}TTS voice        :${NC} $( [[ "$SKIP_AUDIO"       == true ]] && echo 'skip' || echo "${PIPER_VOICE:-${PIPER_DEFAULT_VOICE}} (select interactively)" )"
-  echo -e "  ${CYAN}Web search       :${NC} $( [[ "$SKIP_INTERNET"    == true ]] && echo 'skip' || echo "SearXNG on :${SEARXNG_PORT}" )"
-  echo -e "  ${CYAN}Telegram         :${NC} $( [[ "$SKIP_TELEGRAM"    == true ]] && echo 'skip' || echo 'configure' )"
-  echo -e "  ${CYAN}Onboard wizard   :${NC} $( [[ "$SKIP_ONBOARD"     == true ]] && echo 'skip' || echo 'run' )"
-  echo -e "  ${CYAN}Firewall (UFW)   :${NC} $( [[ "$SKIP_FIREWALL"    == true ]] && echo 'skip' || echo "SSH port: ${FIREWALL_SSH_PORT}" )"
-  echo -e "  ${CYAN}System hardening :${NC} $( [[ "$SKIP_HARDENING"   == true ]] && echo 'skip' || echo 'hostname + SSH + unattended-upgrades' )"
-  echo -e "  ${CYAN}Health monitor   :${NC} $( [[ "$SKIP_HEALTHCHECK" == true ]] && echo 'skip' || echo 'cron every 5 min' )"
-  [[ -n "$HTTP_PROXY" ]] && echo -e "  ${CYAN}HTTP proxy       :${NC} ${HTTP_PROXY}"
-  echo -e "  ${CYAN}Dry run          :${NC} ${DRY_RUN}"
-  echo -e "  ${CYAN}Log file         :${NC} ${LOG_FILE}"
-  echo -e "  ─────────────────────────────────────────────────────"
-  echo
+  tui_plan_card
 
+  echo
   if confirm "Change the Ollama model? (current: ${OLLAMA_META_MODEL_TAG})" "n"; then
     prompt_value "Enter Ollama model tag" "$OLLAMA_META_MODEL_TAG" OLLAMA_META_MODEL_TAG
   fi
 
+  echo
   confirm "Proceed with installation?" "y" || { info "Installation cancelled."; exit 0; }
+  echo
 }
 
 ###############################################################################
@@ -367,8 +331,7 @@ interactive_review() {
 
 run_health_check() {
   echo
-  echo -e "  ${BOLD}Post-install health check${NC}"
-  echo -e "  ─────────────────────────────────────────────────────"
+  TUI_BOX_COLOR="$TUI_ACCENT" tui_box "${ICON_CHART}  Post-install Health Check"
 
   local all_ok=true
 
@@ -384,14 +347,14 @@ run_health_check() {
   [[ "$SKIP_HEALTHCHECK" != true ]] && { check_healthcheck_status || all_ok=false; }
 
   if command -v docker >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✔${NC}  Docker          : $(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    tui_health_row "Docker" "$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" true
   fi
 
-  echo -e "  ─────────────────────────────────────────────────────"
+  tui_divider "single" "$TUI_MUTED"
   if [[ "$all_ok" == true ]]; then
-    success "All health checks passed."
+    tui_notify "All health checks passed" "success"
   else
-    warn "Some checks failed — see output above."
+    tui_notify "Some checks failed — see output above" "warn"
   fi
 }
 
@@ -399,62 +362,47 @@ print_summary() {
   local elapsed
   elapsed="$(elapsed_time "$INSTALL_START_EPOCH")"
 
+  tui_completion_screen "$elapsed"
+
   echo
-  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${GREEN}  ${BOLD}GLaDOS environment is ready!${NC}  ${DIM}(${elapsed})${NC}"
-  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  TUI_BOX_COLOR="$TUI_SUCCESS" tui_box "${ICON_PACKAGE}  Installed Components" \
+    "" \
+    "$(printf '%b%-20s%b  %b%s%b' "$TUI_MUTED" 'Ollama + model' "$TUI_RESET" "$TUI_ACCENT2" "${OLLAMA_META_MODEL_TAG}" "$TUI_RESET")" \
+    "$(printf '%b%-20s%b  %b%s%b' "$TUI_MUTED" 'OpenClaw agent' "$TUI_RESET" "$TUI_ACCENT2" "${GLADOS_AGENT_NAME}" "$TUI_RESET")" \
+    "$([[ "$SKIP_SWAP"     != true ]] && printf '%b%-20s%b  %b%s MB%b' "$TUI_MUTED" 'Swap file' "$TUI_RESET" "$TUI_WHITE" "${SWAP_SIZE_MB}" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_GPU"      != true ]] && printf '%b%-20s%b  %bauto-detected%b' "$TUI_MUTED" 'GPU acceleration' "$TUI_RESET" "$TUI_WHITE" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_AUDIO"    != true ]] && printf '%b%-20s%b  %bWhisper %s + Piper %s%b' "$TUI_MUTED" 'Voice I/O' "$TUI_RESET" "$TUI_WHITE" "${WHISPER_MODEL}" "${PIPER_VOICE:-${PIPER_SELECTED_VOICE}}" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_INTERNET" != true ]] && printf '%b%-20s%b  %bhttp://127.0.0.1:%s%b' "$TUI_MUTED" 'SearXNG search' "$TUI_RESET" "$TUI_ACCENT2" "${SEARXNG_PORT}" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_TELEGRAM" != true ]] && printf '%b%-20s%b  %spending pairing%b' "$TUI_MUTED" 'Telegram' "$TUI_RESET" "$TUI_WARNING" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_FIREWALL" != true ]] && printf '%b%-20s%b  %bSSH port %s%b' "$TUI_MUTED" 'UFW firewall' "$TUI_RESET" "$TUI_WHITE" "${FIREWALL_SSH_PORT}" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_HARDENING" != true ]] && printf '%b%-20s%b  %bSSH + upgrades%b' "$TUI_MUTED" 'Hardening' "$TUI_RESET" "$TUI_WHITE" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_HEALTHCHECK" != true ]] && printf '%b%-20s%b  %bcron 5min%b' "$TUI_MUTED" 'Health monitor' "$TUI_RESET" "$TUI_WHITE" "$TUI_RESET" || echo '')"
+
   echo
-  echo -e "  ${BOLD}Installed components:${NC}"
-  echo -e "    • Ollama + model: ${CYAN}${OLLAMA_META_MODEL_TAG}${NC}"
-  echo -e "    • OpenClaw CLI + gateway  (agent: ${CYAN}${GLADOS_AGENT_NAME}${NC})"
-  [[ "$SKIP_SWAP"        != true ]] && echo -e "    • Swap file: ${CYAN}${SWAP_SIZE_MB}${NC} MB"
-  [[ "$SKIP_GPU"         != true ]] && echo -e "    • GPU acceleration: auto-detected"
-  [[ "$SKIP_AUDIO"       != true ]] && echo -e "    • whisper.cpp (${CYAN}${WHISPER_MODEL}${NC}) + Piper TTS (${CYAN}${PIPER_VOICE:-${PIPER_DEFAULT_VOICE}}${NC})"
-  [[ "$SKIP_INTERNET"    != true ]] && echo -e "    • SearXNG → http://127.0.0.1:${SEARXNG_PORT}"
-  [[ "$SKIP_TELEGRAM"    != true ]] && echo -e "    • Telegram channel (pending pairing)"
-  [[ "$SKIP_FIREWALL"    != true ]] && echo -e "    • UFW firewall (SSH port: ${FIREWALL_SSH_PORT})"
-  [[ "$SKIP_HARDENING"   != true ]] && echo -e "    • System hardening (SSH + unattended-upgrades)"
-  [[ "$SKIP_HEALTHCHECK" != true ]] && echo -e "    • Health monitoring (cron every 5 min)"
+  TUI_BOX_COLOR="$TUI_ACCENT2" tui_box "${ICON_BOLT}  Quick Reference" \
+    "" \
+    "$(printf '%b# Text chat%b'                    "$TUI_MUTED" "$TUI_RESET")" \
+    "$(printf '%bopenclaw ask "Tell me something"%b' "$TUI_ACCENT2" "$TUI_RESET")" \
+    "" \
+    "$([[ "$SKIP_AUDIO" != true ]] && printf '%b# Voice chat%b' "$TUI_MUTED" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_AUDIO" != true ]] && printf '%bglados-voice%b'  "$TUI_ACCENT2" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_AUDIO" != true ]] && echo '' || echo '')" \
+    "$([[ "$SKIP_INTERNET" != true ]] && printf '%b# Web search (auto by LLM)%b' "$TUI_MUTED" "$TUI_RESET" || echo '')" \
+    "$([[ "$SKIP_INTERNET" != true ]] && printf '%bcurl -s http://127.0.0.1:%s/search?q=news\&format=json%b' "$TUI_ACCENT2" "${SEARXNG_PORT}" "$TUI_RESET" || echo '')" \
+    "" \
+    "$(printf '%b# Maintenance%b'                    "$TUI_MUTED" "$TUI_RESET")" \
+    "$(printf '%b%s --backup   %b%b# backup config%b'  "$TUI_ACCENT2" "$(basename "$0")" "$TUI_RESET" "$TUI_MUTED" "$TUI_RESET")" \
+    "$(printf '%b%s --restore  %b%b# restore%b'        "$TUI_ACCENT2" "$(basename "$0")" "$TUI_RESET" "$TUI_MUTED" "$TUI_RESET")" \
+    "$(printf '%b%s --status   %b%b# health overview%b' "$TUI_ACCENT2" "$(basename "$0")" "$TUI_RESET" "$TUI_MUTED" "$TUI_RESET")" \
+    "$(printf '%b%s --uninstall%b%b# remove all%b'     "$TUI_ACCENT2" "$(basename "$0")" "$TUI_RESET" "$TUI_MUTED" "$TUI_RESET")"
+
   echo
-  echo -e "  ${BOLD}Quick reference:${NC}"
-  echo
-  echo -e "    ${DIM}# Text chat${NC}"
-  echo -e "    openclaw ask \"Tell me something interesting\""
-  echo
-  if [[ "$SKIP_AUDIO" != true ]]; then
-    echo -e "    ${DIM}# Voice chat (speak → model → speech reply)${NC}"
-    echo -e "    glados-voice"
-    echo -e "    glados-voice --record-secs 10 --no-tts"
-    echo -e "    echo 'Hello' | glados-tts"
-    echo -e "    glados-stt 5"
-    echo
-  fi
-  if [[ "$SKIP_INTERNET" != true ]]; then
-    echo -e "    ${DIM}# Search the web (used automatically by the LLM)${NC}"
-    echo -e "    curl -s 'http://127.0.0.1:${SEARXNG_PORT}/search?q=latest+news&format=json' | jq '.results[0].title'"
-    echo
-  fi
-  if [[ "$SKIP_TELEGRAM" != true ]]; then
-    echo -e "    ${DIM}# Telegram pairing${NC}"
-    echo -e "    openclaw pairing list telegram"
-    echo -e "    openclaw pairing approve telegram <CODE>"
-    echo
-  fi
-  echo -e "    ${DIM}# Maintenance${NC}"
-  echo -e "    $(basename "$0") --backup        ${DIM}# backup GLaDOS config${NC}"
-  echo -e "    $(basename "$0") --restore       ${DIM}# restore from backup${NC}"
-  echo -e "    $(basename "$0") --status        ${DIM}# system health overview${NC}"
-  echo -e "    $(basename "$0") --uninstall     ${DIM}# remove everything${NC}"
-  echo
-  echo -e "    openclaw status  ·  openclaw gateway status  ·  openclaw dashboard"
-  echo -e "    ollama list"
-  echo
-  echo -e "  ${BOLD}Log:${NC} ${DIM}${LOG_FILE}${NC}"
+  tui_kv "Log" "$LOG_FILE" "${ICON_INFO}"
   echo
 
   run_health_check
   echo
-  success "All ${TOTAL_STEPS} steps completed in ${elapsed}."
+  tui_notify "All ${TOTAL_STEPS} steps completed in ${elapsed}" "success"
 }
 
 ###############################################################################
@@ -463,9 +411,10 @@ print_summary() {
 
 show_status() {
   print_banner
-  echo -e "  ${BOLD}GLaDOS Environment Status${NC}"
-  echo -e "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  TUI_BOX_COLOR="$TUI_ACCENT" tui_box "${ICON_CHART}  GLaDOS Environment Status"
   echo
+
   check_ollama_health   || true
   check_openclaw_health || true
 
@@ -486,13 +435,14 @@ show_status() {
   check_healthcheck_status || true
 
   if command -v docker >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✔${NC}  Docker          : $(docker --version 2>/dev/null)"
+    tui_health_row "Docker" "$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" true
   else
-    echo -e "  ${YELLOW}⚠${NC}  Docker          : not installed"
+    tui_health_row "Docker" "not installed" false
   fi
+
   echo
-  echo -e "  ${BOLD}Log directory:${NC} ${DIM}${LOG_DIR}${NC}"
-  echo -e "  ${BOLD}Backups:${NC}       ${DIM}${BACKUP_DIR}${NC}"
+  tui_kv "Log directory" "$LOG_DIR" "${ICON_INFO}"
+  tui_kv "Backups"       "$BACKUP_DIR" "${ICON_PACKAGE}"
   echo
 }
 
