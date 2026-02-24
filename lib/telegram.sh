@@ -36,12 +36,12 @@ configure_openclaw_telegram() {
   fi
 
   log "Configuring Telegram channel (token not logged for security)."
-  run_cmd openclaw config set channels.telegram.enabled true
+  oc_config_set channels.telegram.enabled true
 
   # Pass token via environment to avoid exposing it in `ps` process listing.
   TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}" \
-    run_cmd openclaw config set channels.telegram.botToken --from-env TELEGRAM_BOT_TOKEN
-  run_cmd openclaw config set channels.telegram.dmPolicy "pairing"
+    oc_config_set channels.telegram.botToken --from-env TELEGRAM_BOT_TOKEN
+  oc_config_set channels.telegram.dmPolicy "pairing"
 
   success "Telegram channel configured."
 

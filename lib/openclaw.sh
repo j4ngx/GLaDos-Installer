@@ -6,6 +6,25 @@
 [[ -n "${_GLADOS_OPENCLAW_LOADED:-}" ]] && return 0
 readonly _GLADOS_OPENCLAW_LOADED=1
 
+# ---------------------------------------------------------------------------
+# Quiet config setter — suppresses OpenClaw's verbose banners & SHA diffs.
+# Output is logged to LOG_FILE; errors are surfaced normally.
+# ---------------------------------------------------------------------------
+oc_config_set() {
+  if [[ "$DRY_RUN" == true ]]; then
+    info "${DIM}[dry-run]${NC} openclaw config set $*"
+    return 0
+  fi
+  local out
+  debug "exec: openclaw config set $*"
+  if ! out=$(openclaw config set "$@" 2>&1); then
+    warn "openclaw config set $* — failed"
+    echo "$out" | _strip_ansi >> "$LOG_FILE"
+    return 1
+  fi
+  echo "$out" | _strip_ansi >> "$LOG_FILE"
+}
+
 install_openclaw() {
   section "OpenClaw installation"
 
@@ -58,10 +77,10 @@ configure_openclaw_ollama() {
   # OpenClaw 2026+ uses 'vllm' as the provider type for any OpenAI-compatible
   # backend (including Ollama). The onboarding wizard registers it as 'vllm',
   # so config paths must use that key — not 'ollama'.
-  run_cmd openclaw config set models.providers.vllm.apiKey "ollama-local"
-  run_cmd openclaw config set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
-  run_cmd openclaw config set models.providers.vllm.api "openai-completions"
-  run_cmd openclaw config set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
+  oc_config_set models.providers.vllm.apiKey "ollama-local"
+  oc_config_set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
+  oc_config_set models.providers.vllm.api "openai-completions"
+  oc_config_set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
 
   success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
 }
@@ -82,12 +101,12 @@ configure_openclaw_websearch() {
   local searxng_url="http://127.0.0.1:${SEARXNG_PORT}"
 
   # Built-in web_search tool (Brave API); enable so the agent can search.
-  run_cmd openclaw config set tools.web.search.enabled true
-  run_cmd openclaw config set tools.web.search.maxResults 5
+  oc_config_set tools.web.search.enabled true
+  oc_config_set tools.web.search.maxResults 5
 
   # Enable web_fetch so the agent can query SearXNG's JSON API directly:
   #   GET http://127.0.0.1:<port>/search?q=<query>&format=json
-  run_cmd openclaw config set tools.web.fetch.enabled true
+  oc_config_set tools.web.fetch.enabled true
 
   success "Web search enabled — SearXNG available at ${searxng_url}/search?format=json"
 }
