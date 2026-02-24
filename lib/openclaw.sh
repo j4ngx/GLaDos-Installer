@@ -25,45 +25,47 @@ install_openclaw() {
 }
 
 run_openclaw_onboard() {
-  section "OpenClaw onboarding wizard"
+  section "OpenClaw gateway & daemon setup"
   require_command openclaw "OpenClaw CLI"
 
-  echo
-  echo -e "  ${BOLD}The onboarding wizard will:${NC}"
-  echo -e "    • Configure authentication and security"
-  echo -e "    • Set up the local gateway (ports, binding)"
-  echo -e "    • Install the background daemon"
-  echo -e "    • Optionally connect communication channels"
-  echo
-  echo -e "  ${BOLD}Recommended choices:${NC}"
-  echo -e "    • Bind gateway to ${BOLD}127.0.0.1${NC} for security"
-  echo -e "    • Accept daemon installation"
-  echo
-  echo -e "  ${DIM}Re-run any time: openclaw onboard --install-daemon${NC}"
-  echo
-
-  if [[ "$NON_INTERACTIVE" == true ]]; then
-    warn "Non-interactive mode — onboard wizard requires interactive input."
+  # Idempotent: skip if gateway is already up
+  if openclaw gateway status >/dev/null 2>&1; then
+    success "OpenClaw gateway already running — skipping setup."
+    return
   fi
 
-  run_cmd openclaw onboard --install-daemon
-  success "OpenClaw onboarding completed."
+  # Bind gateway to loopback only (no interactive wizard needed)
+  run_cmd openclaw config set gateway.host "127.0.0.1" || true
+
+  log "Installing OpenClaw background daemon..."
+  if ! run_cmd openclaw daemon install; then
+    warn "Daemon install returned non-zero — may already be installed."
+  fi
+
+  log "Starting OpenClaw gateway..."
+  if ! run_cmd openclaw gateway start; then
+    warn "Gateway did not start cleanly — check: openclaw gateway status"
+  fi
+
+  success "OpenClaw gateway and daemon configured."
 }
 
 configure_openclaw_ollama() {
   section "Configuring OpenClaw ↔ Ollama integration"
   require_command openclaw "OpenClaw CLI"
 
-  # Registers Ollama as a local provider (dummy key — Ollama is keyless)
-  run_cmd openclaw config set models.providers.ollama.apiKey "ollama-local"
-  run_cmd openclaw config set models.providers.ollama.baseUrl "http://127.0.0.1:11434"
-  run_cmd openclaw config set agents.defaults.model.primary "ollama/${OLLAMA_META_MODEL_TAG}"
+  # OpenClaw 2026+ uses 'vllm' as the provider type for any OpenAI-compatible
+  # backend (including Ollama). The onboarding wizard registers it as 'vllm',
+  # so config paths must use that key — not 'ollama'.
+  run_cmd openclaw config set models.providers.vllm.apiKey "ollama-local"
+  run_cmd openclaw config set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
+  run_cmd openclaw config set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
   run_cmd openclaw config set agents.defaults.label "${GLADOS_AGENT_NAME}" || true
 
   # Enable streaming for richer interactive feel
-  run_cmd openclaw config set models.providers.ollama.streaming true || true
+  run_cmd openclaw config set models.providers.vllm.streaming true || true
 
-  success "Default model → ollama/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
+  success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
 }
 
 configure_openclaw_voice() {

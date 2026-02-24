@@ -105,7 +105,6 @@ ${BOLD}FEATURE FLAGS${NC}
   --skip-audio            Do not install voice input/output (Whisper + Piper)
   --skip-internet         Do not deploy SearXNG web-search
   --skip-telegram         Skip Telegram channel configuration
-  --skip-onboard          Skip 'openclaw onboard' wizard (run manually later)
 
 ${BOLD}RUN-MODE FLAGS${NC}
   --non-interactive       Accept all defaults without prompting
@@ -244,7 +243,6 @@ parse_args() {
       --skip-healthcheck) SKIP_HEALTHCHECK=true ;;
       --non-interactive)  NON_INTERACTIVE=true ;;
       --skip-telegram)    SKIP_TELEGRAM=true ;;
-      --skip-onboard)     SKIP_ONBOARD=true ;;
       --skip-audio)       SKIP_AUDIO=true ;;
       --skip-internet)    SKIP_INTERNET=true ;;
       --dry-run)          DRY_RUN=true ;;
@@ -278,7 +276,7 @@ parse_args() {
   [[ "$SKIP_GPU"         != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
   [[ "$SKIP_AUDIO"       != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
   [[ "$SKIP_INTERNET"    != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
-  [[ "$SKIP_ONBOARD"     != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+  TOTAL_STEPS=$((TOTAL_STEPS + 1))  # openclaw gateway & daemon setup (always runs)
   [[ "$SKIP_TELEGRAM"    != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
   [[ "$SKIP_FIREWALL"    != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
   [[ "$SKIP_HARDENING"   != true ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
@@ -497,7 +495,7 @@ main() {
   pull_ollama_model
   install_openclaw
 
-  [[ "$SKIP_ONBOARD" != true ]] && run_openclaw_onboard
+  run_openclaw_onboard
 
   configure_openclaw_ollama
 

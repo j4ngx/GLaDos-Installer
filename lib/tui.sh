@@ -754,7 +754,7 @@ tui_plan_card() {
     "$(tui_kv_inline 'TTS voice'        "$( [[ "$SKIP_AUDIO"       == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo "${PIPER_VOICE:-${PIPER_SELECTED_VOICE}}" )")" \
     "$(tui_kv_inline 'Web search'       "$( [[ "$SKIP_INTERNET"    == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo "SearXNG :${SEARXNG_PORT}" )")" \
     "$(tui_kv_inline 'Telegram'         "$( [[ "$SKIP_TELEGRAM"    == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo 'configure' )")" \
-    "$(tui_kv_inline 'Onboard wizard'   "$( [[ "$SKIP_ONBOARD"     == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo 'run' )")" \
+    "$(tui_kv_inline 'OC gateway'       "${TUI_ACCENT2}auto${TUI_RESET}")" \
     "$(tui_kv_inline 'Firewall (UFW)'   "$( [[ "$SKIP_FIREWALL"    == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo "SSH :${FIREWALL_SSH_PORT}" )")" \
     "$(tui_kv_inline 'Hardening'        "$( [[ "$SKIP_HARDENING"   == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo 'SSH + upgrades' )")" \
     "$(tui_kv_inline 'Health monitor'   "$( [[ "$SKIP_HEALTHCHECK" == true ]] && echo "${TUI_MUTED}skip${TUI_RESET}" || echo 'cron 5min' )")" \
