@@ -35,7 +35,8 @@ run_openclaw_onboard() {
   fi
 
   # Bind gateway to loopback only (no interactive wizard needed)
-  run_cmd openclaw config set gateway.host "127.0.0.1" || true
+  # Correct key is 'gateway.bind'; accepts: auto | loopback | lan | tailnet | custom
+  run_cmd openclaw config set gateway.bind "loopback" || true
 
   log "Installing OpenClaw background daemon..."
   if ! run_cmd openclaw daemon install; then
@@ -59,11 +60,8 @@ configure_openclaw_ollama() {
   # so config paths must use that key — not 'ollama'.
   run_cmd openclaw config set models.providers.vllm.apiKey "ollama-local"
   run_cmd openclaw config set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
+  run_cmd openclaw config set models.providers.vllm.api "openai-completions"
   run_cmd openclaw config set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
-  run_cmd openclaw config set agents.defaults.name "${GLADOS_AGENT_NAME}" || true
-
-  # Enable streaming for richer interactive feel
-  run_cmd openclaw config set agents.defaults.streaming true || true
 
   success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
 }
@@ -73,13 +71,9 @@ configure_openclaw_voice() {
   # Configures OpenClaw to use the local whisper-stt and piper-tts wrappers.
   require_command openclaw "OpenClaw CLI"
 
-  run_cmd openclaw config set integrations.voice.stt.provider "whisper-local"
-  run_cmd openclaw config set integrations.voice.stt.command "glados-stt"
-  run_cmd openclaw config set integrations.voice.tts.provider "piper-local"
-  run_cmd openclaw config set integrations.voice.tts.command "glados-tts"
-  run_cmd openclaw config set integrations.voice.enabled true || true
-
-  success "Voice (STT/TTS) configured in OpenClaw."
+  # Note: OpenClaw has no voice config section — the glados-stt / glados-tts
+  # wrappers invoke whisper.cpp and Piper directly, bypassing the gateway.
+  success "Voice (STT/TTS) wrappers installed (standalone, not managed by OpenClaw)."
 }
 
 configure_openclaw_websearch() {
@@ -87,13 +81,15 @@ configure_openclaw_websearch() {
   require_command openclaw "OpenClaw CLI"
   local searxng_url="http://127.0.0.1:${SEARXNG_PORT}"
 
-  run_cmd openclaw config set tools.webSearch.enabled true
-  run_cmd openclaw config set tools.webSearch.provider "searxng"
-  run_cmd openclaw config set tools.webSearch.baseUrl "${searxng_url}"
-  run_cmd openclaw config set tools.webSearch.maxResults 5
-  run_cmd openclaw config set agents.defaults.tools.webSearch true || true
+  # Built-in web_search tool (Brave API); enable so the agent can search.
+  run_cmd openclaw config set tools.web.search.enabled true
+  run_cmd openclaw config set tools.web.search.maxResults 5
 
-  success "Web search (SearXNG → ${searxng_url}) configured in OpenClaw."
+  # Enable web_fetch so the agent can query SearXNG's JSON API directly:
+  #   GET http://127.0.0.1:<port>/search?q=<query>&format=json
+  run_cmd openclaw config set tools.web.fetch.enabled true
+
+  success "Web search enabled — SearXNG available at ${searxng_url}/search?format=json"
 }
 
 # Health helper
