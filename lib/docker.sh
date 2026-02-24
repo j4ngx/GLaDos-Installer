@@ -36,8 +36,8 @@ install_docker_if_missing() {
     warn "Docker installer does not start with a shebang — proceeding with caution."
   fi
   debug "Docker installer downloaded: $(wc -c < "$tmpfile") bytes."
-  # Use -eu without pipefail: external installer scripts may not be pipefail-safe
-  sudo bash --noprofile --norc -eu "$tmpfile"
+  # Use -e only: the third-party script may reference unset variables
+  sudo bash --noprofile --norc -e "$tmpfile"
   rm -f "$tmpfile"
   spinner_stop
 
