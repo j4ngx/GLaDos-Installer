@@ -187,9 +187,16 @@ iface ${iface} inet static
 EOF
 )"
 
-  # Remove existing stanza for this interface, then append the new one
+  # Remove existing stanza for this interface, then append the new one.
+  # Use awk instead of sed range-delete to avoid eating blank lines that
+  # belong to adjacent stanzas.
   run_cmd sudo bash -c "
-    sed -i '/^auto ${iface}\$/,/^\$/d; /^iface ${iface} /,/^\$/d' '${ifaces_file}'
+    awk -v iface='${iface}' '
+      /^(auto|iface) / && \$0 ~ iface { skip=1; next }
+      skip && /^[^ \t]/ { skip=0 }
+      skip { next }
+      { print }
+    ' '${ifaces_file}' > '${ifaces_file}.tmp' && mv '${ifaces_file}.tmp' '${ifaces_file}'
     echo '' >> '${ifaces_file}'
     cat <<'STANZA' >> '${ifaces_file}'
 ${stanza}
@@ -254,11 +261,6 @@ NETPLAN
 
 configure_static_ip() {
   section "Static IP configuration"
-
-  if [[ "$SKIP_STATIC_IP" == true ]]; then
-    info "Static IP configuration skipped (--skip-static-ip)."
-    return 0
-  fi
 
   # Interactive prompt — returns 1 if user declines
   if ! prompt_static_ip; then
