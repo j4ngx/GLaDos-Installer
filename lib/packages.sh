@@ -31,8 +31,21 @@ install_base_packages() {
     unzip tar
   )
 
-  spinner_start "Installing packages (${#pkgs[@]} items)..."
-  run_cmd sudo apt-get install -y -qq "${pkgs[@]}"
+  # Check which packages are missing to avoid a no-op install
+  local missing=()
+  for pkg in "${pkgs[@]}"; do
+    if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+      missing+=("$pkg")
+    fi
+  done
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    success "All ${#pkgs[@]} base packages already installed."
+    return
+  fi
+
+  spinner_start "Installing ${#missing[@]} missing packages (${#pkgs[@]} total)..."
+  run_cmd sudo apt-get install -y -qq "${missing[@]}"
   spinner_stop
   success "Base packages installed."
 }
