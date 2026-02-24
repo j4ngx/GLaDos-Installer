@@ -83,6 +83,7 @@ _install_whisper_cpp() {
 
   # Build inside the whisper.cpp directory; pass cmake flags as positional args
   # to avoid word-splitting issues with array expansion in bash -c strings.
+  # shellcheck disable=SC2016  # Single quotes are intentional — args via $1/$@
   run_cmd bash -c '
     cd "$1" || exit 1
     shift
@@ -242,8 +243,10 @@ GLADOS_STT
 _install_glados_tts_wrapper() {
   local script="${PIPER_BIN_DIR}/glados-tts"
   local piper_bin="${PIPER_BIN_DIR}/piper"
-  local onnx="${PIPER_INSTALL_DIR}/voices/${PIPER_DEFAULT_VOICE}.onnx"
-  local json="${PIPER_INSTALL_DIR}/voices/${PIPER_DEFAULT_VOICE}.onnx.json"
+  local voice_dir="${PIPER_INSTALL_DIR}/voices"
+  local voice_name="${PIPER_SELECTED_VOICE}"
+  local onnx="${voice_dir}/${voice_name}.onnx"
+  local json="${voice_dir}/${voice_name}.onnx.json"
 
   cat >"$script" <<GLADOS_TTS
 #!/usr/bin/env bash
@@ -420,8 +423,8 @@ readonly _PIPER_VOICE_CATALOG=(
 select_piper_voice() {
   # If PIPER_VOICE was set via CLI, use it directly
   if [[ -n "${PIPER_VOICE:-}" ]]; then
-    PIPER_DEFAULT_VOICE="$PIPER_VOICE"
-    info "Using CLI-specified Piper voice: ${PIPER_DEFAULT_VOICE}"
+    PIPER_SELECTED_VOICE="$PIPER_VOICE"
+    info "Using CLI-specified Piper voice: ${PIPER_SELECTED_VOICE}"
     return
   fi
 
@@ -435,7 +438,7 @@ select_piper_voice() {
     local desc="${entry##*|}"
     local name="${entry%%|*}"
     local marker=""
-    [[ "$name" == "$PIPER_DEFAULT_VOICE" ]] && marker=" ${GREEN}← current${NC}"
+    [[ "$name" == "$PIPER_SELECTED_VOICE" ]] && marker=" ${GREEN}← current${NC}"
     echo -e "    ${BOLD}${i}.${NC} ${desc}${marker}"
   done
   echo
@@ -447,16 +450,15 @@ select_piper_voice() {
      [[ "$_voice_choice" -ge 1 ]] && \
      [[ "$_voice_choice" -le "${#_PIPER_VOICE_CATALOG[@]}" ]]; then
     local chosen="${_PIPER_VOICE_CATALOG[$((_voice_choice - 1))]}"
-    PIPER_DEFAULT_VOICE="${chosen%%|*}"
-    success "Voice set to: ${PIPER_DEFAULT_VOICE}"
+    PIPER_SELECTED_VOICE="${chosen%%|*}"
+    success "Voice set to: ${PIPER_SELECTED_VOICE}"
   else
-    warn "Invalid choice — keeping default voice: ${PIPER_DEFAULT_VOICE}"
+    warn "Invalid choice — keeping default voice: ${PIPER_SELECTED_VOICE}"
   fi
 }
 
 _download_piper_voice_by_catalog() {
-  # Called by _download_piper_voice; resolves voice paths from catalog
-  local target_name="$PIPER_DEFAULT_VOICE"
+  local target_name="$PIPER_SELECTED_VOICE"
   for entry in "${_PIPER_VOICE_CATALOG[@]}"; do
     local name="${entry%%|*}"
     if [[ "$name" == "$target_name" ]]; then
@@ -499,29 +501,42 @@ _download_piper_voice_by_catalog() {
 
 _download_piper_voice_legacy() {
   local voice_dir="${PIPER_INSTALL_DIR}/voices"
-  local onnx="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx"
-  local json="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx.json"
+  local onnx="${voice_dir}/${PIPER_SELECTED_VOICE}.onnx"
+  local json="${voice_dir}/${PIPER_SELECTED_VOICE}.onnx.json"
 
   if [[ -f "$onnx" && -f "$json" ]]; then
-    success "Piper voice '${PIPER_DEFAULT_VOICE}' already present."
+    success "Piper voice '${PIPER_SELECTED_VOICE}' already present."
     return
   fi
 
   mkdir -p "$voice_dir"
   local base_url="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-  local hf_path="en/en_US/amy/medium"
 
-  spinner_start "Downloading Piper voice model '${PIPER_DEFAULT_VOICE}'..."
+  # Attempt to derive HuggingFace path from the voice name
+  # Format: lang_REGION-speaker-quality → lang/lang_REGION/speaker/quality
+  local lang region speaker quality hf_path
+  if [[ "$PIPER_SELECTED_VOICE" =~ ^([a-z]{2})_([A-Z]{2})-([a-zA-Z0-9]+)-([a-z]+)$ ]]; then
+    lang="${BASH_REMATCH[1]}"
+    region="${BASH_REMATCH[2]}"
+    speaker="${BASH_REMATCH[3]}"
+    quality="${BASH_REMATCH[4]}"
+    hf_path="${lang}/${lang}_${region}/${speaker}/${quality}"
+  else
+    warn "Cannot derive HuggingFace path for voice '${PIPER_SELECTED_VOICE}' — download may fail."
+    hf_path="en/en_US/amy/medium"
+  fi
+
+  spinner_start "Downloading Piper voice model '${PIPER_SELECTED_VOICE}'..."
   retry "Piper voice onnx" \
     curl -fL --connect-timeout 30 --max-time 300 \
-      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx" -o "$onnx"
+      "${base_url}/${hf_path}/${PIPER_SELECTED_VOICE}.onnx" -o "$onnx"
   retry "Piper voice config" \
     curl -fL --connect-timeout 30 --max-time 60 \
-      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx.json" -o "$json"
+      "${base_url}/${hf_path}/${PIPER_SELECTED_VOICE}.onnx.json" -o "$json"
   spinner_stop
 
   [[ -s "$onnx" ]] || fail "Piper voice model download failed."
-  success "Piper voice '${PIPER_DEFAULT_VOICE}' downloaded ✔"
+  success "Piper voice '${PIPER_SELECTED_VOICE}' downloaded ✔"
 }
 
 # ---------------------------------------------------------------------------
