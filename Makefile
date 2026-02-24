@@ -18,7 +18,7 @@ help:
 ## lint: Run ShellCheck static analysis
 lint:
 	@echo "Running ShellCheck..."
-	shellcheck -x -s bash $(SCRIPT)
+	shellcheck -x -s bash $(SCRIPT) lib/*.sh
 	@echo "✔ ShellCheck passed"
 
 ## check: Verify bash syntax

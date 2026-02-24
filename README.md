@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash&logoColor=white" alt="Shell: Bash">
   <img src="https://img.shields.io/badge/platform-Debian%2013-A81D33?logo=debian&logoColor=white" alt="Platform: Debian 13">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
-  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen" alt="Version: 2.0.0">
+  <img src="https://img.shields.io/badge/version-3.0.0-brightgreen" alt="Version: 3.0.0">
   <img src="https://github.com/j4ngx/glados_installer/actions/workflows/ci.yml/badge.svg" alt="CI">
 </p>
 
@@ -15,7 +15,7 @@
 <p align="center">
   <strong>All-in-one installer for a local AI assistant stack on low-power hardware.</strong>
   <br>
-  Ollama · OpenClaw · Telegram
+  Ollama · OpenClaw · Whisper STT · Piper TTS · SearXNG · Telegram
 </p>
 
 ---
@@ -31,6 +31,9 @@ GLaDOS Installer is a professional, single-script installer that sets up a compl
 | **[Ollama](https://ollama.com)** | Local LLM runtime for running models on-device |
 | **Meta Llama 3** | Default language model (configurable) |
 | **[OpenClaw](https://openclaw.ai)** | Personal AI assistant with gateway and CLI |
+| **[whisper.cpp](https://github.com/ggerganov/whisper.cpp)** | Offline speech-to-text (STT) via GGML models |
+| **[Piper TTS](https://github.com/rhasspy/piper)** | Offline text-to-speech (TTS) |
+| **[SearXNG](https://github.com/searxng/searxng)** | Self-hosted meta-search engine for real-time web access |
 | **Telegram Bot** | Optional Telegram integration for remote access |
 
 ## Features
@@ -53,7 +56,7 @@ GLaDOS Installer is a professional, single-script installer that sets up a compl
 | **OS** | Debian 13 (other Debian-based distros may work) |
 | **Architecture** | x86_64 or ARM64 |
 | **RAM** | 4 GB (8 GB recommended) |
-| **Disk** | 10 GB free space |
+| **Disk** | 15 GB free space |
 | **Network** | Internet access required for downloads |
 | **Privileges** | `sudo` access |
 
@@ -100,7 +103,11 @@ OPTIONS
   --model <tag>         Ollama model tag (default: llama3)
                         Examples: llama3, llama3.1:instruct, phi3:mini
   --agent-name <name>   OpenClaw agent label (default: GLaDOS)
+  --whisper-model <sz>  Whisper STT model size (default: small)
+                        Values: tiny, base, small, medium, large
   --non-interactive     Skip interactive prompts where possible
+  --skip-audio          Do not install voice input/output (Whisper + Piper)
+  --skip-internet       Do not deploy SearXNG web-search
   --skip-telegram       Skip Telegram channel configuration
   --skip-onboard        Skip 'openclaw onboard' wizard (run manually later)
   --dry-run             Show what would be done without making changes
@@ -140,14 +147,17 @@ export TELEGRAM_BOT_TOKEN="123456:ABCdef..."
 The installer executes the following steps in order:
 
 ```
-[1/8]  Pre-flight system checks
-[2/8]  Installing base system packages
-[3/8]  Docker runtime
-[4/8]  Ollama installation
-[5/8]  Pulling Ollama model
-[6/8]  OpenClaw installation
-[7/8]  OpenClaw onboarding wizard        (skippable)
-[8/8]  Telegram channel configuration    (skippable)
+[ 1/10]  Pre-flight system checks
+[ 2/10]  Installing base system packages
+[ 3/10]  Docker runtime
+[ 4/10]  Ollama installation
+[ 5/10]  Pulling Ollama model
+[ 6/10]  OpenClaw installation
+[ 7/10]  OpenClaw onboarding wizard        (skippable)
+[ 8/10]  Configuring OpenClaw ↔ Ollama
+[ 9/10]  Voice interface (Whisper + Piper)  (skippable)
+[10/10]  Internet / web-search (SearXNG)   (skippable)
+          Telegram channel configuration   (skippable)
 ```
 
 Each step includes health checks and graceful error recovery.
@@ -201,11 +211,21 @@ Logs are automatically stripped of ANSI colour codes for clean storage.
 
 ```
 glados_installer/
-├── glados_installer.sh   # Main installer script
+├── glados_installer.sh   # Main installer script (entry point)
+├── lib/
+│   ├── common.sh         # Shared constants, logging, utilities
+│   ├── preflight.sh      # Pre-flight system checks
+│   ├── packages.sh       # APT base package installation
+│   ├── docker.sh         # Docker runtime setup
+│   ├── ollama.sh         # Ollama install & model management
+│   ├── openclaw.sh       # OpenClaw CLI, onboarding & config
+│   ├── audio.sh          # whisper.cpp STT + Piper TTS + wrappers
+│   ├── internet.sh       # SearXNG web-search via Docker Compose
+│   └── telegram.sh       # Telegram bot channel configuration
 ├── README.md             # This file
 ├── LICENSE               # MIT License
 ├── CHANGELOG.md          # Version history
-├── CONTRIBUTING.md        # Contribution guidelines
+├── CONTRIBUTING.md       # Contribution guidelines
 ├── SECURITY.md           # Security policy
 ├── Makefile              # Development shortcuts
 ├── .editorconfig         # Editor consistency
