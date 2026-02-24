@@ -49,11 +49,6 @@ _current_swap_mb() {
 configure_swap() {
   section "Swap file configuration"
 
-  if [[ "$SKIP_SWAP" == true ]]; then
-    info "Swap configuration skipped (--skip-swap)."
-    return 0
-  fi
-
   local current_swap
   current_swap="$(_current_swap_mb)"
 
@@ -113,11 +108,11 @@ _create_swap_file() {
   fs_type="$(df --output=fstype "$(dirname "$GLADOS_SWAP_FILE")" 2>/dev/null | tail -1 | xargs)"
   if [[ "$fs_type" =~ ^(btrfs|zfs) ]]; then
     debug "Filesystem ${fs_type} detected — using dd (fallocate incompatible with swap)."
-    run_cmd sudo dd if=/dev/zero of="$GLADOS_SWAP_FILE" bs=1M count="$size_mb" status=none
+    run_cmd sudo dd if=/dev/zero of="$GLADOS_SWAP_FILE" bs=1M count="$size_mb" 2>/dev/null
   elif command -v fallocate >/dev/null 2>&1; then
     run_cmd sudo fallocate -l "${size_mb}M" "$GLADOS_SWAP_FILE"
   else
-    run_cmd sudo dd if=/dev/zero of="$GLADOS_SWAP_FILE" bs=1M count="$size_mb" status=none
+    run_cmd sudo dd if=/dev/zero of="$GLADOS_SWAP_FILE" bs=1M count="$size_mb" 2>/dev/null
   fi
   spinner_stop
 
