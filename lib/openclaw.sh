@@ -20,7 +20,9 @@ oc_config_set() {
   if ! out=$(openclaw config set "$@" 2>&1); then
     warn "openclaw config set $* — failed"
     echo "$out" | _strip_ansi >> "$LOG_FILE"
-    return 1
+    # Don't return 1 — avoids killing the installer under set -e.
+    # The warning is sufficient; caller can check gateway health later.
+    return 0
   fi
   echo "$out" | _strip_ansi >> "$LOG_FILE"
 }
@@ -80,7 +82,7 @@ configure_openclaw_ollama() {
   # Ollama's OpenAI-compatible API lives under /v1/ — the base URL must include it.
   oc_config_set models.providers.vllm.apiKey "ollama-local"
   oc_config_set models.providers.vllm.baseUrl "http://127.0.0.1:11434/v1"
-  oc_config_set models.providers.vllm.api "openai-chat"
+  oc_config_set models.providers.vllm.api "openai-completions"
   oc_config_set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
 
   success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
