@@ -60,10 +60,10 @@ configure_openclaw_ollama() {
   run_cmd openclaw config set models.providers.vllm.apiKey "ollama-local"
   run_cmd openclaw config set models.providers.vllm.baseUrl "http://127.0.0.1:11434"
   run_cmd openclaw config set agents.defaults.model.primary "vllm/${OLLAMA_META_MODEL_TAG}"
-  run_cmd openclaw config set agents.defaults.label "${GLADOS_AGENT_NAME}" || true
+  run_cmd openclaw config set agents.defaults.name "${GLADOS_AGENT_NAME}" || true
 
   # Enable streaming for richer interactive feel
-  run_cmd openclaw config set models.providers.vllm.streaming true || true
+  run_cmd openclaw config set agents.defaults.streaming true || true
 
   success "Default model → vllm/${OLLAMA_META_MODEL_TAG}  (agent: ${GLADOS_AGENT_NAME})"
 }
@@ -73,11 +73,11 @@ configure_openclaw_voice() {
   # Configures OpenClaw to use the local whisper-stt and piper-tts wrappers.
   require_command openclaw "OpenClaw CLI"
 
-  run_cmd openclaw config set voice.stt.provider "whisper-local"
-  run_cmd openclaw config set voice.stt.command "glados-stt"
-  run_cmd openclaw config set voice.tts.provider "piper-local"
-  run_cmd openclaw config set voice.tts.command "glados-tts"
-  run_cmd openclaw config set voice.enabled true || true
+  run_cmd openclaw config set integrations.voice.stt.provider "whisper-local"
+  run_cmd openclaw config set integrations.voice.stt.command "glados-stt"
+  run_cmd openclaw config set integrations.voice.tts.provider "piper-local"
+  run_cmd openclaw config set integrations.voice.tts.command "glados-tts"
+  run_cmd openclaw config set integrations.voice.enabled true || true
 
   success "Voice (STT/TTS) configured in OpenClaw."
 }
