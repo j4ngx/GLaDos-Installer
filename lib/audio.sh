@@ -32,6 +32,7 @@ _whisper_model()  { echo "${WHISPER_INSTALL_DIR}/models/ggml-${WHISPER_MODEL}.bi
 install_audio() {
   section "Voice interface (Whisper STT + Piper TTS)"
 
+  select_piper_voice
   _install_whisper_cpp
   _download_whisper_model
   _install_piper_tts
@@ -92,6 +93,9 @@ _install_whisper_cpp() {
 
   [[ -x "$binary" ]] || fail "whisper.cpp build failed — binary not found at ${binary}."
   success "whisper.cpp compiled ✔"
+
+  # Clean build artifacts to reclaim ~500 MB of disk
+  _clean_whisper_build_artifacts
 }
 
 # ---------------------------------------------------------------------------
@@ -176,32 +180,7 @@ _install_piper_tts() {
 }
 
 _download_piper_voice() {
-  local voice_dir="${PIPER_INSTALL_DIR}/voices"
-  local onnx="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx"
-  local json="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx.json"
-
-  if [[ -f "$onnx" && -f "$json" ]]; then
-    success "Piper voice '${PIPER_DEFAULT_VOICE}' already present."
-    return
-  fi
-
-  mkdir -p "$voice_dir"
-
-  local base_url="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-  # Voice path on HuggingFace: en/en_US/amy/medium/
-  local hf_path="en/en_US/amy/medium"
-
-  spinner_start "Downloading Piper voice model '${PIPER_DEFAULT_VOICE}'..."
-  retry "Piper voice onnx" \
-    curl -fL --connect-timeout 30 --max-time 300 \
-      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx" -o "$onnx"
-  retry "Piper voice config" \
-    curl -fL --connect-timeout 30 --max-time 60 \
-      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx.json" -o "$json"
-  spinner_stop
-
-  [[ -s "$onnx" ]] || fail "Piper voice model download failed."
-  success "Piper voice '${PIPER_DEFAULT_VOICE}' downloaded ✔"
+  _download_piper_voice_by_catalog
 }
 
 # ---------------------------------------------------------------------------
@@ -392,6 +371,157 @@ GLADOS_VOICE
   # Helpful alias hint
   echo
   echo -e "  ${DIM}Add to your shell profile: alias glados='glados-voice'${NC}"
+}
+
+# ---------------------------------------------------------------------------
+# Build artifact cleanup (~500 MB savings)
+# ---------------------------------------------------------------------------
+
+_clean_whisper_build_artifacts() {
+  local build_dir="${WHISPER_INSTALL_DIR}/build"
+  [[ -d "$build_dir" ]] || return 0
+
+  # Keep only the final binaries; remove CMake intermediaries, .o files, etc.
+  local before_kb after_kb saved_mb
+  before_kb="$(du -sk "$build_dir" 2>/dev/null | cut -f1)"
+
+  # Remove object files, CMake temp dirs, and static libs
+  find "$build_dir" -type f \( -name '*.o' -o -name '*.a' -o -name '*.cmake' \) -delete 2>/dev/null || true
+  find "$build_dir" -type d -name 'CMakeFiles' -exec rm -rf {} + 2>/dev/null || true
+  rm -rf "${build_dir}/_deps" 2>/dev/null || true
+  rm -rf "${build_dir}/CMakeCache.txt" 2>/dev/null || true
+  rm -rf "${build_dir}/Makefile" 2>/dev/null || true
+
+  after_kb="$(du -sk "$build_dir" 2>/dev/null | cut -f1)"
+  saved_mb="$(( (before_kb - after_kb) / 1024 ))"
+
+  if [[ $saved_mb -gt 0 ]]; then
+    success "Cleaned whisper.cpp build artifacts — ${saved_mb} MB reclaimed."
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Interactive Piper voice selection
+# ---------------------------------------------------------------------------
+
+# A curated list of popular Piper voices for en_US / en_GB.
+# Format: "short_name|hf_path|onnx_file|description"
+readonly _PIPER_VOICE_CATALOG=(
+  "en_US-amy-medium|en/en_US/amy/medium|en_US-amy-medium|Amy (US, medium, default)"
+  "en_US-amy-low|en/en_US/amy/low|en_US-amy-low|Amy (US, low quality, faster)"
+  "en_US-lessac-medium|en/en_US/lessac/medium|en_US-lessac-medium|Lessac (US, medium)"
+  "en_US-lessac-high|en/en_US/lessac/high|en_US-lessac-high|Lessac (US, high quality)"
+  "en_US-ryan-medium|en/en_US/ryan/medium|en_US-ryan-medium|Ryan (US, male, medium)"
+  "en_US-kusal-medium|en/en_US/kusal/medium|en_US-kusal-medium|Kusal (US, male, medium)"
+  "en_GB-cori-medium|en/en_GB/cori/medium|en_GB-cori-medium|Cori (GB, female, medium)"
+  "en_GB-alan-medium|en/en_GB/alan/medium|en_GB-alan-medium|Alan (GB, male, medium)"
+)
+
+select_piper_voice() {
+  # If PIPER_VOICE was set via CLI, use it directly
+  if [[ -n "${PIPER_VOICE:-}" ]]; then
+    PIPER_DEFAULT_VOICE="$PIPER_VOICE"
+    info "Using CLI-specified Piper voice: ${PIPER_DEFAULT_VOICE}"
+    return
+  fi
+
+  [[ "$NON_INTERACTIVE" == true ]] && return
+
+  echo
+  echo -e "  ${BOLD}Available Piper TTS voices:${NC}"
+  local i=0
+  for entry in "${_PIPER_VOICE_CATALOG[@]}"; do
+    i=$((i + 1))
+    local desc="${entry##*|}"
+    local name="${entry%%|*}"
+    local marker=""
+    [[ "$name" == "$PIPER_DEFAULT_VOICE" ]] && marker=" ${GREEN}← current${NC}"
+    echo -e "    ${BOLD}${i}.${NC} ${desc}${marker}"
+  done
+  echo
+
+  local _voice_choice=""
+  prompt_value "Select voice number (1-${#_PIPER_VOICE_CATALOG[@]})" "1" _voice_choice
+
+  if [[ "$_voice_choice" =~ ^[0-9]+$ ]] && \
+     [[ "$_voice_choice" -ge 1 ]] && \
+     [[ "$_voice_choice" -le "${#_PIPER_VOICE_CATALOG[@]}" ]]; then
+    local chosen="${_PIPER_VOICE_CATALOG[$((_voice_choice - 1))]}"
+    PIPER_DEFAULT_VOICE="${chosen%%|*}"
+    success "Voice set to: ${PIPER_DEFAULT_VOICE}"
+  else
+    warn "Invalid choice — keeping default voice: ${PIPER_DEFAULT_VOICE}"
+  fi
+}
+
+_download_piper_voice_by_catalog() {
+  # Called by _download_piper_voice; resolves voice paths from catalog
+  local target_name="$PIPER_DEFAULT_VOICE"
+  for entry in "${_PIPER_VOICE_CATALOG[@]}"; do
+    local name="${entry%%|*}"
+    if [[ "$name" == "$target_name" ]]; then
+      local rest="${entry#*|}"
+      local hf_path="${rest%%|*}"
+      rest="${rest#*|}"
+      local onnx_name="${rest%%|*}"
+
+      local voice_dir="${PIPER_INSTALL_DIR}/voices"
+      local onnx="${voice_dir}/${onnx_name}.onnx"
+      local json="${voice_dir}/${onnx_name}.onnx.json"
+
+      if [[ -f "$onnx" && -f "$json" ]]; then
+        success "Piper voice '${target_name}' already present."
+        return
+      fi
+
+      mkdir -p "$voice_dir"
+      local base_url="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+
+      spinner_start "Downloading Piper voice '${target_name}'..."
+      retry "Piper voice onnx" \
+        curl -fL --connect-timeout 30 --max-time 300 \
+          "${base_url}/${hf_path}/${onnx_name}.onnx" -o "$onnx"
+      retry "Piper voice config" \
+        curl -fL --connect-timeout 30 --max-time 60 \
+          "${base_url}/${hf_path}/${onnx_name}.onnx.json" -o "$json"
+      spinner_stop
+
+      [[ -s "$onnx" ]] || fail "Piper voice model download failed."
+      success "Piper voice '${target_name}' downloaded ✔"
+      return
+    fi
+  done
+
+  # Fallback: voice not in catalog — try the old hardcoded path logic
+  warn "Voice '${target_name}' not in catalog — attempting generic download."
+  _download_piper_voice_legacy
+}
+
+_download_piper_voice_legacy() {
+  local voice_dir="${PIPER_INSTALL_DIR}/voices"
+  local onnx="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx"
+  local json="${voice_dir}/${PIPER_DEFAULT_VOICE}.onnx.json"
+
+  if [[ -f "$onnx" && -f "$json" ]]; then
+    success "Piper voice '${PIPER_DEFAULT_VOICE}' already present."
+    return
+  fi
+
+  mkdir -p "$voice_dir"
+  local base_url="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+  local hf_path="en/en_US/amy/medium"
+
+  spinner_start "Downloading Piper voice model '${PIPER_DEFAULT_VOICE}'..."
+  retry "Piper voice onnx" \
+    curl -fL --connect-timeout 30 --max-time 300 \
+      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx" -o "$onnx"
+  retry "Piper voice config" \
+    curl -fL --connect-timeout 30 --max-time 60 \
+      "${base_url}/${hf_path}/${PIPER_DEFAULT_VOICE}.onnx.json" -o "$json"
+  spinner_stop
+
+  [[ -s "$onnx" ]] || fail "Piper voice model download failed."
+  success "Piper voice '${PIPER_DEFAULT_VOICE}' downloaded ✔"
 }
 
 # ---------------------------------------------------------------------------
